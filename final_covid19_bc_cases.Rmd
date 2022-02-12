@@ -1,0 +1,569 @@
+---
+title: "COVID-19 case numbers in British Columbia"
+subtitle: "Capstone project: BIDA 302"
+author: "Anthony Bassey"
+output: html_document
+---
+
+
+
+## Background
+
+
+As the COVID-19 pandemic enters its next phase, the number of cases in British Columbia is increasing.
+
+Here are two charts by Jens von Bergmann:
+
+### BC weekly cases
+
+https://twitter.com/vb_jens/status/1298407214189690880?s=20
+
+![BC weekly cases by age group](bc_covid_cases_age_2020-08-25.jpg)
+
+# Preparing the environment
+
+#### Install Packages and Load libraries
+For this project, we will use the tidyverse, ggplot2, readr and lubridate libraries for our analysis,
+
+```{r}
+#install.packages("tidyverse")
+#install.packages("readr")
+
+library(ggplot2)
+library(tidyverse)
+library(readr)
+library(lubridate)
+```
+
+# Working on the 1st question
+This would be a chart showing the number of cases based on the reported dates and age groups.
+
+#### Approach
+We need to read the csv files into our project, then filter for cases in BC, and then show our data in a histogram to show the distribution of cases.
+
+
+Read the file in
+```{r}
+# Read in csv files
+popest <- read_csv("Population_Estimates.csv", col_names = TRUE)
+coviddash <- read_csv("BCCDC_COVID19_Dashboard_Case_Details_2021-11-28_22-02.csv", col_names = TRUE)
+```
+
+We can view our file that's been read-in. We can see the head, tail, summary statistics, etc.
+```{r}
+# View Data
+head(coviddash)
+tail(coviddash)
+summary(coviddash)
+str(coviddash)
+```
+
+We filter for BC stats because our data contains "Out of Canada" values. We also mutate the data to create a new variable to show the count or frequency of occurence, while summarising the newly created variable to determine the total number of infected in each age group cases per week.
+
+```{r}
+# Filter Data for BC stats
+covgg <- coviddash %>% 
+  filter(Reported_Date >= "2020-01-01", Reported_Date <= "2020-08-25") %>%
+  mutate(inf_count = 1) %>% group_by(Reported_Date, Age_Group) %>% summarise(Age_Group, num_inf = sum(inf_count)) %>% ungroup()
+covgg 
+tail(covgg)
+
+```
+
+
+We plot our data as a histogram using geom_histogram() to show the distribution of cases by Age Group.
+
+```{r}
+# Plot Data
+covplot <- ggplot(covgg, aes(x= Reported_Date, fill = Age_Group)) +
+  geom_histogram() + labs(fill = "Age group") +
+  #Add Labels & Title
+  xlab("") + ylab("Weekly Cases") + ggtitle("BC weekly COVID-19 cases by age group (up to Wed Aug 25)") 
+covplot 
+
+```
+
+
+
+We can mutate and then filter our data to get the week and number of cases based on the week,
+```{r}
+# Plot Data
+plotexp <- coviddash %>% filter(Reported_Date >= "2020-01-01", Reported_Date <= "2020-08-25") %>% mutate(ref_date = week(ymd(Reported_Date))) %>% select(-Reported_Date) %>% mutate(inf1 = 1) %>% group_by(ref_date, Age_Group) %>% summarise(Age_Group, numinf1 = sum(inf1))
+tail(plotexp)
+
+ggplot(plotexp, aes(x= ref_date, fill = Age_Group)) +
+  geom_col(aes(y = numinf1)) + labs(fill = "Age group") +
+  #Add Labels & Title
+  xlab("") + ylab("Weekly Cases") + ggtitle("BC weekly COVID-19 cases by age group (up to Wed Aug 25)")
+```
+
+
+
+however, this approach would only be looking at x values on a discrete scale, whereas we want to plot our values on a continuous scale.
+```{r}
+plotexp2 <- coviddash %>% filter(Reported_Date >= "2020-01-01", Reported_Date <= "2021-11-28") %>% mutate(ref_date = week(ymd(Reported_Date))) %>% select(-Reported_Date) %>% mutate(inf1 = 1) %>% group_by(ref_date, Age_Group) %>% summarise(Age_Group, numinf1 = sum(inf1))
+tail(plotexp2)
+
+ggplot(plotexp2, aes(x= ref_date, fill = Age_Group)) +
+  geom_col(aes(y = numinf1)) + labs(fill = "Age group") +
+  #Add Labels & Title
+  xlab("") + ylab("Weekly Cases") + ggtitle("BC weekly COVID-19 cases by age group (up to Wed Aug 25)")
+```
+
+
+
+##### For this project, I will use the code that generated the first image showing our plot on a continuos _x_ scale
+
+
+#### We can also view the different age groups and the changes over time by using a line graph. First, using reported dates as our _x_ variable and our mutated variable for the number of cases per week as our _y_ variable, we use the facet_wrap function to show the different groups.
+
+
+```{r}
+# Line plot and showing different age groups
+covplotline <- ggplot(covgg, aes(x= Reported_Date, colour = Age_Group)) +
+  geom_line(aes(y= num_inf), alpha = 0.3) +
+  geom_smooth(aes(y=num_inf), size=0.4, se= FALSE)+ 
+  facet_wrap(~Age_Group) + theme(legend.position = "bottom") + ylab("Weekly Cases") + theme_bw()
+covplotline
+```
+
+
+As we can see, as of 2020-08-25 the were high rates of infection (20+ per day) amongst 20-29 and 30-39 age groups and moderate levels (10+ per day) in 40-49 age group, and  later into the pandemic, and high levels (5+ per day) relative to other age groups amongst 30-39 to 80-89 at the start of the pandemic.
+
+
+
+We can create a function to efficiently plot multiple data.
+```{r warning=FALSE}
+# Creating ggplot function
+covp <- function(v, d, f) {
+       pl <- ggplot(v, aes(x= d, fill = f)) +
+  geom_histogram() +
+  #Add Labels & Title
+  xlab("") + ylab("Weekly Cases") + ggtitle("BC weekly COVID-19 cases by age group (up to Wed Aug 25)") 
+      return(pl)
+}
+```
+
+
+# Working on more recent Data
+
+#### We want to look at cases up till 2021-11-09 to determine the changes over time between our data sets.
+
+Read in the files to be used, but specify dates 2020-01-01 to 2021-11-09.
+
+```{r warning=FALSE}
+# Viewing most recent Covid data
+covgg2 <- coviddash %>% 
+  filter(HA != "Out of Canada", Reported_Date >= "2020-01-01", Reported_Date <= "2021-11-09") %>%
+  mutate(inf_count = 1) %>% group_by(Reported_Date, Age_Group) %>% summarise(Age_Group, num_inf = sum(inf_count)) %>% ungroup()
+covgg2
+```
+
+
+We filter for BC stats because our data contains "Out of Canada" values. We also mutate the data to create a new variable to show the count or frequency of occurence, while summarising the newly created variable to determine the total number of infected cases per week.
+
+```{r warning=FALSE}
+covplot2 <- ggplot(covgg2, aes(x = Reported_Date, fill = Age_Group)) +
+  geom_histogram() + labs(fill = "Age group") +
+  #Add Labels & Title
+  xlab("") + ylab("Weekly Cases") + ggtitle("BC weekly COVID-19 cases by age group (up to Sun Nov 28)") 
+covplot2
+```
+
+
+Looking at the changes over time in different Age groups.
+```{r}
+# Line plot and showing different age groups
+covplotline2 <- ggplot(covgg2, aes(x= Reported_Date, colour = Age_Group)) +
+  geom_line(aes(y= num_inf), alpha = 0.3) +
+  geom_smooth(aes(y=num_inf), size=0.4, se= FALSE)+ 
+  facet_wrap(~Age_Group) + theme(legend.position = "bottom") + scale_x_date(date_labels = "%b") + theme_bw()
+covplotline2
+```
+
+
+
+As we can see, as of 2021-11-09 cases peaked for all age groups except 80-89 and 90+ within May 2021 to June 2021. There has been a decline since July which could be epxlained by the higher rates of vaccination within all age groups. Generally, the trend has been a decreasing or declining in all age groups.
+
+_________________________________________________________________________________________________________________
+
+### BC daily cases, adjusted for population
+
+https://twitter.com/vb_jens/status/1325965304925577218?s=20
+
+![BC daily cases per 100k population](bc_dailycases_per_100k.jpg)
+## Other visualizations of data from the same source
+
+https://twitter.com/vb_jens/status/1323423179390418944?s=20
+
+Animations:
+
+https://twitter.com/vb_jens/status/1323649252770291713?s=20
+
+## Data source
+
+Source: COVID-19 Canada Open Data Working Group
+
+[opencovid.ca GitHub repository](https://github.com/jeanpaulrsoucy/covid-19-canada-gov-data)
+
+Current to 2020-11-11
+_________________________________________________________________________________________________________________
+
+
+# WORKING ON QUESTION 2
+
+### Goal: Show the regional daily cases per 100k population over time. Contrast recent data with data obtained on specified date from sample image of graph.
+
+#### Approach:
+        Create a new column with int 1
+        group by health region,
+        summarise (tot_case = sum(int 1 col))
+        Filter Tot population of each region from Pop est csv
+        left join filtered table to covid dash board
+        create new variable using total of pop from joined covid dash board
+        filter by regions and calculate cases per 100k population for each region
+        join tables together
+        plot data
+        
+        
+
+```{r}
+# WORKING ON QUESTION 2 
+
+# Read our csv file in showing population estimates
+popest <- read_csv("Population_Estimates.csv", col_names = TRUE)
+
+# Filter out BC and create new variable for gender to be used in left join
+popest <- popest %>% mutate(Sex = `Gender`) %>% filter(`Health Authority`!= "British Columbia")
+popest
+
+#Select new table
+popest <- popest %>% select("Region" : "Year","Sex","Total":"90+") 
+popest 
+```
+
+
+
+```{r}
+# Read files for our covid cases 
+coviddash2 <- read_csv("BCCDC_COVID19_Dashboard_Case_Details_2021-11-28_22-02.csv", col_names = TRUE)
+
+covinfreq2 <- coviddash2 %>% filter(Reported_Date >= "2020-01-01", Reported_Date <= "2020-11-09")
+```
+
+Reading files in to our environment.
+
+
+```{r}
+# Get Total population of each region
+totpop <- popest %>% mutate(HA = `Health Authority`) %>% group_by(HA) %>% select(HA, Total, Sex) %>% filter(Sex == "T") %>% select(HA, Total)
+totpop
+```
+
+
+
+We have analyzed the data to obtain the total populations in each region by filtering our data.
+
+
+```{r}
+# Total Cases by Region
+regcase <- covinfreq2 %>% group_by(HA) %>% mutate(casecount = 1) %>% mutate(casescov = sum(casecount)) %>% distinct(HA, casescov)
+regcase
+```
+
+
+
+We have analyzed the data to obtain the total number of cases in each region. Fraser and Vancouver Coastal had the most cases at 11,823 and 5,858 cases respectively.
+
+
+
+```{r}
+# Daily Cases
+daycase <- covinfreq2 %>% group_by(Reported_Date, HA) %>% mutate(countah = 1) %>% summarise(totcountah = sum(countah)) %>% ungroup()
+daycase
+```
+
+
+
+We have calculated the total number of cases daily
+
+
+```{r}
+# Joining tables into one data set
+threejoins <- daycase %>% left_join(regcase, by = "HA") %>% left_join(totpop, by = "HA")
+threejoins
+```
+
+
+
+We have combined 3 new objects to make a data set showing dates, health authority, daily cases, total number of cases, and total population of each region.
+
+
+## Further analysis
+
+Now we do some further analysis to calculate the daily cases per 100k population.
+
+```{r}
+# Calculating daily cases per 100k population and group by date, Health Authority & cases
+caseplot <- threejoins %>% mutate(case100k = (Total/100000)) %>% mutate(case100k = totcountah/case100k) %>% group_by(Reported_Date) %>% select(Reported_Date, HA, case100k)
+caseplot
+```
+
+
+
+Our new variable _case100k_ is now added to our data showing the daily cases per 100k. This calculation uses the total population of each region / 100000, and then divides daily case count using this value to obtain the 100K case count.
+
+
+
+```{r}
+# Change regions to "Rest of BC"
+caseplot <- caseplot %>% mutate(HA = case_when(HA == "Vancouver Coastal" ~ "Vancouver Coastal",
+                                   HA == "Fraser" ~ "Fraser",
+                                   HA == "Out of Canada" ~ "Out of Canada",
+                                   TRUE ~ "Rest of BC"))
+caseplot
+```
+
+
+
+Now we have a tibble with dates, health authorities, and cases per 100k population.
+
+
+Now we filter data to remove "Out of Canada" values from our data, while specifying the date ranges we want for our analysis.
+```{r}
+# Filter data to include Health Authorities for Canada and Dates
+caseplot <- caseplot %>% filter(HA != "Out of Canada") %>% filter(Reported_Date >= "2020-01-01", Reported_Date <= "2020-11-09")
+tail(caseplot)
+```
+
+
+
+Now we filter data for just "Rest of BC" values and creating a variable for our filter. 
+```{r}
+# Creating a variable for rest of bc values
+caseplotbc <- caseplot %>% filter(HA == "Rest of BC") %>% mutate(case100k_bc = case100k) %>% select(Reported_Date, HA, case100k_bc)
+caseplotbc
+```
+
+
+
+Now we filter data for just "Fraser" values and creating a variable for our filter. 
+```{r}
+# Creating a variable for Fraser values
+caseplotfr <- caseplot %>% filter(HA == "Fraser") %>% mutate(case100k_fr = case100k) %>% select(Reported_Date, HA, case100k_fr)
+caseplotfr
+```
+
+
+
+Now we filter data for just "Vancouver Coastal" values and creating a variable for our filter. 
+```{r}
+# Creating variable for Vancouver Coastal values
+caseplotvc <- caseplot %>% filter(HA == "Vancouver Coastal") %>% mutate(case100k_vc = case100k) %>% select(Reported_Date, HA, case100k_vc)
+caseplotvc
+```
+
+
+
+Now we join the 3 new tables into the original data set to create a new table showing daily cases count per 100k population for each region for our analysis
+```{r}
+# Join the 3 tables into original data set to create new data 
+caseplotgg <- caseplot %>% left_join(caseplotbc, by = c("Reported_Date", "HA")) %>% left_join(caseplotfr, by = c("Reported_Date", "HA")) %>% left_join(caseplotvc, by = c("Reported_Date", "HA")) %>% select(Reported_Date, HA, case100k_bc : case100k_vc)
+caseplotgg
+```
+
+
+
+### We plot our data on a line graph to show the changes over time.
+```{r warning=FALSE}
+# Plotting newly created Data
+casegg <- ggplot(caseplotgg, aes(x = Reported_Date)) +
+  geom_line(aes(y = case100k_bc, colour = HA), alpha = 0.1) +
+  geom_line(aes(y = case100k_fr, colour = HA), alpha = 0.1) +
+  geom_line(aes(y = case100k_vc, colour = HA), alpha = 0.1) +
+  geom_smooth(aes(y = case100k_bc, colour = "Rest of BC"), se = FALSE) +
+  geom_smooth(aes(y = case100k_fr, colour = "Fraser"), se = FALSE) +
+  geom_smooth(aes(y = case100k_vc, colour = "Vancouver Coastal"), se = FALSE) +
+  # Adding Labels
+  xlab("") + ylab("Daily cases per 100k population") + 
+  # Adding titles
+  ggtitle("Covid-19 daily new cases in British Columbia (up to Sun Nov 08)") + 
+  # Adding colours
+  scale_colour_manual("", values=c("Rest of BC"="#FFEA00", "Fraser"="firebrick4", "Vancouver Coastal"="#0096FF")) + 
+  # Changing date scale for x variable on graph
+  scale_x_date(date_labels = "%b", date_breaks = "1 month") + 
+  # Changing theme and legend position
+  theme_bw() + theme(legend.position = "bottom")
+
+# View plot
+casegg
+
+```
+
+
+
+As we can see, as of 2022-11-09, the number of cases sky-rocketed in the Fraser and Vancouver Coastal regions.
+
+
+To view the different regions, 
+```{r warning=FALSE}
+# View separate regions
+reg_case <- casegg + facet_wrap(~HA) + scale_x_date(date_breaks = "3 months", date_labels = "%b") + theme(legend.position = "bottom")
+
+reg_case
+```
+
+
+
+Analyzing the graphs for each region, Fraser and Vancouver saw spikes in daily cases in contrast to the rest of BC. Fraser and Vancouver Coastal as of 2020-11-09 were reporting over 15 and 10 cases daily respectively, while the rest of BC barely had 5 daily cases. 
+
+
+
+## Working on recent data as of 2021-11-28
+
+We read our data in while filtering and specifying dates and assigning the results to an object.
+```{r}
+# Total Pop of infected in each region
+covinfreq_rec <- coviddash2 %>% filter(Reported_Date >= "2020-01-01", Reported_Date <= "2021-11-28") %>% filter(HA != "Out of Canada")
+
+covinfreq_rec
+
+tail(covinfreq_rec)
+```
+
+
+
+Get total number of cases in each region
+```{r}
+# Total Cases by Region
+regcase_rec <- covinfreq_rec %>% group_by(HA) %>% mutate(casecount = 1) %>% mutate(casescov = sum(casecount)) %>% distinct(HA, casescov)
+regcase_rec
+```
+
+
+
+Get the number of daily cases 
+```{r}
+# Daily Cases
+daycase_rec <- covinfreq_rec %>% group_by(Reported_Date, HA) %>% mutate(countah = 1) %>% summarise(totcountah = sum(countah)) %>% ungroup()
+daycase_rec
+```
+
+
+
+Combine our results into one data set. We join the number of daily cases, region cases, and total population of each region into one table.
+```{r}
+# Joining tables into one data set
+threejoins_rec <- daycase_rec %>% left_join(regcase, by = "HA") %>% left_join(totpop, by = "HA") %>% ungroup()
+threejoins_rec
+```
+
+
+
+Calculating the daily cases per 100k population of all Health Authorities
+```{r}
+# Calculating daily cases per 100k population and group by date, Health Authority & cases
+caseplot_rec <- threejoins_rec %>% mutate(case100k = (Total/100000)) %>% mutate(case100k = totcountah/case100k) %>% group_by(Reported_Date) %>% select(Reported_Date, HA, case100k) %>% ungroup()
+caseplot_rec
+```
+
+
+
+```{r}
+# Change regions to "Rest of BC"
+caseplot_rec <- caseplot_rec %>% mutate(HA = case_when(HA == "Vancouver Coastal" ~ "Vancouver Coastal", 
+                                                       HA == "Fraser" ~ "Fraser", 
+                                                       HA == "Out of Canada" ~ "Out of Canada",
+                                                       TRUE ~ "Rest of BC"))
+caseplot_rec
+```
+
+
+
+Filtering our data to remove "Out of Canada" and specify dates uptil 2021-11-28 and assigning the result to an object
+```{r}
+# Filter data to include Health Authorities for Canada and Dates
+caseplot_rec <- caseplot_rec %>% filter(HA != "Out of Canada") %>% filter(Reported_Date >= "2020-01-01", Reported_Date <= "2021-11-28")
+tail(caseplot_rec)
+```
+
+
+
+Now we filter data for just "Rest of BC" values and creating a variable for our filter. 
+```{r}
+# Creating a variable for rest of bc values
+caseplotbc_rec <- caseplot_rec %>% filter(HA == "Rest of BC") %>% mutate(case100k_bc = case100k) %>% select(Reported_Date, HA, case100k_bc)
+caseplotbc_rec
+```
+
+
+
+Now we filter data for just "Fraser" values and creating a variable for our filter. 
+```{r}
+# Creating a variable for Fraser values
+caseplotfr_rec <- caseplot_rec %>% filter(HA == "Fraser") %>% mutate(case100k_fr = case100k) %>% select(Reported_Date, HA, case100k_fr)
+caseplotfr_rec
+```
+
+
+
+Now we filter data for just "Vancouver Coastal" values and creating a variable for our filter. 
+```{r}
+# Creating variable for Vancouver Coastal values
+caseplotvc_rec <- caseplot_rec %>% filter(HA == "Vancouver Coastal") %>% mutate(case100k_vc = case100k) %>% select(Reported_Date, HA, case100k_vc)
+caseplotvc_rec
+```
+
+
+
+Combine all tables into original data set
+```{r}
+# Join the 3 tables into original data set to create new data 
+caseplotgg_rec <- caseplot_rec %>% left_join(caseplotbc_rec, by = c("Reported_Date", "HA")) %>% left_join(caseplotfr_rec, by = c("Reported_Date", "HA")) %>% left_join(caseplotvc_rec, by = c("Reported_Date", "HA")) %>% select(Reported_Date, HA, case100k_bc : case100k_vc) %>% ungroup()
+caseplotgg_rec
+```
+
+
+
+# Plotting recent data
+```{r warning=FALSE}
+# Plotting newly created Data
+casegg_rec <- ggplot(caseplotgg_rec, aes(x = Reported_Date)) +
+  geom_line(aes(y = case100k_bc, colour = HA), alpha = 0.1) +
+  geom_line(aes(y = case100k_fr, colour = HA), alpha = 0.1) +
+  geom_line(aes(y = case100k_vc, colour = HA), alpha = 0.1) +
+  geom_smooth(aes(y = case100k_bc, colour = "Rest of BC"), se = FALSE) +
+  geom_smooth(aes(y = case100k_fr, colour = "Fraser"), se = FALSE) +
+  geom_smooth(aes(y = case100k_vc, colour = "Vancouver Coastal"), se = FALSE) +
+  # Adding Labels
+  xlab("") + ylab("Daily cases per 100k population") + 
+  # Adding titles
+  ggtitle("Covid-19 daily new cases in British Columbia (up to Sun Nov 08)") + 
+  # Adding colours
+  scale_colour_manual("", values=c("Rest of BC"="#FFEA00", "Fraser"="firebrick4", "Vancouver Coastal"="#0096FF")) + 
+  # Changing date scale for x variable on graph
+  scale_x_date(date_labels = "%b", date_breaks = "1 month") + 
+  # Changing theme and legend position
+  theme_bw() + theme(legend.position = "bottom")
+
+# View plot
+casegg_rec
+
+```
+
+
+
+View seperate regions
+```{r warning=FALSE}
+# View separate regions
+reg_case_ytd <- casegg_rec + facet_wrap(~HA) + scale_x_date(date_breaks = "3 months", date_labels = "%b") + theme(legend.position = "bottom")
+
+reg_case_ytd
+```
+
+
+
+As we can see, the cases of Covid have been decreasing, but there was a spike across the rest of BC in contrast to Fraser and Vancouver Coastal regions. Vancouver Coastal seems to be reporting the lowest daily cases, while the rest of BC is reporting high levels relative to the start of the pandemic. 
+
+
+-30-
